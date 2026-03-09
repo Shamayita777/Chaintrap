@@ -1,0 +1,122 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "chaintrap"
+version = "2.0.0"
+description = "Ransomware Detection & Protection System with Blockchain-Anchored Forensic Audit Trail"
+authors = [
+    { name = "ChainTrap Team" }
+]
+license = { text = "Proprietary" }
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = [
+    "ransomware", "detection", "cybersecurity", "blockchain",
+    "forensics", "canary-tokens", "entropy-analysis", "honeyfiles"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Topic :: System :: Monitoring",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "watchdog>=4.0.0",
+    "psutil>=5.9.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "types-requests",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+]
+benchmark = [
+    "pytest>=7.4.0",
+    "pytest-timeout>=2.1.0",
+]
+
+[project.scripts]
+chaintrap        = "main:main"
+chaintrap-bench  = "eval.benchmark:main"
+chaintrap-dash   = "api.dashboard:main"
+chaintrap-canary = "core.canary_server:main"
+
+[project.urls]
+Homepage   = "https://github.com/your-org/chaintrap"
+Issues     = "https://github.com/your-org/chaintrap/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "api*", "eval*", "config*"]
+exclude = ["tests*", "*.pyc", "__pycache__"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.yaml", "*.yml"]
+
+# ─────────────────────────────────────────────
+# Ruff (linter + formatter)
+# ─────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length    = 100
+exclude        = [
+    ".git", "__pycache__", "*.pyc",
+    ".github", "dist", "build",
+]
+
+[tool.ruff.lint]
+select  = ["E", "W", "F", "I", "UP"]
+ignore  = [
+    "E501",   # Line too long (handled by formatter)
+    "F401",   # Unused imports (some are re-exports)
+    "UP007",  # Use X | Y for type hints (we support 3.9)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F811", "E402"]
+"eval/*"  = ["F401"]
+
+# ─────────────────────────────────────────────
+# mypy
+# ─────────────────────────────────────────────
+[tool.mypy]
+python_version         = "3.10"
+warn_return_any        = true
+warn_unused_configs    = true
+ignore_missing_imports = true
+no_strict_optional     = true
+
+# ─────────────────────────────────────────────
+# Coverage
+# ─────────────────────────────────────────────
+[tool.coverage.run]
+source  = ["core", "api", "eval"]
+omit    = ["tests/*", "*/test_*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+precision    = 2
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

@@ -1,0 +1,28 @@
+# ChainTrap v2 — Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# ── Core detection ────────────────────────────────────────────────────────────
+numpy>=1.24.0          # Vectorized byte-level entropy computation
+scipy>=1.11.0          # Chi-squared randomness test (scipy.stats.chisquare)
+
+# ── Cross-platform filesystem monitoring ─────────────────────────────────────
+watchdog>=4.0.0        # inotify (Linux) / FSEvents (macOS) / ReadDirectoryChangesW (Windows)
+
+# ── Process management ────────────────────────────────────────────────────────
+psutil>=5.9.0          # Cross-platform process enumeration and termination
+
+# ── Blockchain remote replication ─────────────────────────────────────────────
+requests>=2.31.0       # HTTP webhook replication + IPFS API calls
+
+# ── Testing & benchmarking (Part 2) ──────────────────────────────────────────
+pytest>=7.4.0          # Test runner
+pytest-timeout>=2.1.0  # Test timeouts for performance benchmarking
+
+# ── Dashboard API (Part 2) ────────────────────────────────────────────────────
+# Uses Python stdlib http.server — no extra dependencies required.
+# Optional: install flask for production deployment
+# flask>=3.0.0           # Optional: swap stdlib server for Flask in production
+
+# ── Canary token embedding (Part 2) ──────────────────────────────────────────
+# DOCX/XLSX embed uses stdlib zipfile — no extra deps.
+# PDF embed uses stdlib re + bytes — no extra deps.

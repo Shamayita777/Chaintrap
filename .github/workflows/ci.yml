@@ -1,0 +1,288 @@
+name: ChainTrap v2 — CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly regression run at 2am UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1: Lint & Type Check
+  # ─────────────────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting tools
+        run: |
+          pip install ruff mypy types-requests
+
+      - name: Ruff lint
+        run: |
+          ruff check . --select E,W,F --ignore E501,W503
+
+      - name: Ruff format check
+        run: |
+          ruff format --check .
+
+      - name: mypy type check (core)
+        run: |
+          mypy core/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true  # Type hints are best-effort
+
+  # ─────────────────────────────────────────────
+  # JOB 2: Unit Tests (matrix: 3 OS × 2 Python)
+  # ─────────────────────────────────────────────
+  test:
+    name: Tests (${{ matrix.os }} / Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-timeout pytest-cov
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -v --timeout=30 --tb=short \
+            --cov=core --cov=api --cov=eval \
+            --cov-report=xml --cov-report=term-missing \
+            -m "not slow"
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        with:
+          file: coverage.xml
+          flags: unittests
+          name: chaintrap-coverage
+
+  # ─────────────────────────────────────────────
+  # JOB 3: Benchmark Regression
+  # ─────────────────────────────────────────────
+  benchmark:
+    name: Benchmark Regression
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run benchmark suite
+        run: |
+          python -m eval.benchmark \
+            --profile all \
+            --n-benign 50 \
+            --n-malicious 25 \
+            --output results/benchmark_ci.json
+
+      - name: Check benchmark thresholds
+        run: |
+          python - << 'EOF'
+          import json, sys
+          data = json.loads(open("results/benchmark_ci.json").read())
+          failures = []
+          for r in data["results"]:
+              p = r["profile"]
+              if "ransomware" in p:
+                  if r["recall"] < 0.60:
+                      failures.append(f"{p}: recall={r['recall']:.3f} < 0.60 THRESHOLD")
+                  if r["latency_p95_ms"] > 500:
+                      failures.append(f"{p}: p95_latency={r['latency_p95_ms']:.1f}ms > 500ms THRESHOLD")
+          if failures:
+              print("BENCHMARK FAILURES:")
+              for f in failures:
+                  print(f"  ❌ {f}")
+              sys.exit(1)
+          else:
+              print("✅ All benchmark thresholds passed")
+          EOF
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/benchmark_ci.json
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # JOB 4: Self-Test (End-to-End)
+  # ─────────────────────────────────────────────
+  selftest:
+    name: End-to-End Self-Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Part 1 self-test
+        run: python main.py --test
+
+      - name: Run Part 2 self-test
+        run: python test_part2.py
+
+  # ─────────────────────────────────────────────
+  # JOB 5: Build Distribution Package
+  # ─────────────────────────────────────────────
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [test, benchmark, selftest]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Check distribution
+        run: twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # JOB 6: Security Scan
+  # ─────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install safety & bandit
+        run: pip install safety bandit
+
+      - name: Dependency vulnerability scan
+        run: safety check -r requirements.txt --full-report
+        continue-on-error: true
+
+      - name: Static security analysis
+        run: |
+          bandit -r core/ api/ eval/ \
+            -ll \
+            --exclude "*/test_*,*/tests/*" \
+            -f json -o bandit_report.json || true
+          python - << 'EOF'
+          import json
+          data = json.loads(open("bandit_report.json").read())
+          high = [r for r in data.get("results", []) if r["issue_severity"] == "HIGH"]
+          if high:
+              print(f"⚠  {len(high)} HIGH severity findings (review required)")
+              for r in high[:5]:
+                  print(f"  {r['filename']}:{r['line_number']} — {r['issue_text']}")
+          else:
+              print("✅ No HIGH severity security issues")
+          EOF
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: bandit_report.json
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # JOB 7: Integration Tests (Part 3)
+  # ─────────────────────────────────────────────
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-timeout
+
+      - name: Run integration test suite
+        run: |
+          pytest tests/test_integration.py -v \
+            --timeout=120 \
+            --tb=short
+
+      - name: Threat simulation — fast profiles
+        run: |
+          python -m eval.threat_sim --profile lockbit_style --file-count 10 --verbose
+          python -m eval.threat_sim --profile wannacry_style --file-count 10
+          python -m eval.threat_sim --profile fpe_evasion --file-count 10
+          python -m eval.threat_sim --profile partial_encrypt --file-count 10
+
+      - name: Threat simulation — all profiles (dry run)
+        run: python -m eval.threat_sim --profile all --file-count 5 --dry-run
