@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+
+# Runtime folders
+ChainTrap/
+quarantine/
+
+# Python build files
+build/
+dist/
+*.egg-info/
