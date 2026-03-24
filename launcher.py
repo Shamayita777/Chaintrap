@@ -26,6 +26,7 @@ import threading
 import webbrowser
 import socket
 import pathlib
+from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
 PORT = 5000
@@ -145,7 +146,7 @@ def main():
     )
     monitor_thread.start()
 
-    time.sleep(1.5)
+    time.sleep(4)
 
     if monitor_proc.poll() is not None:
         print(f"\n{R}  Error: ChainTrap engine crashed on startup.{X}")
@@ -163,8 +164,16 @@ def main():
         print(f"  {Y}  ⚠ Port {PORT} already in use — assuming dashboard is already running.{X}")
     else:
         if dashboard_py.exists():
+            chain_path = str(Path.home() / "ChainTrap/chain/local_chain.json")
+            events_path = str(Path.home() / "ChainTrap/logs/events.jsonl")
+
             api_proc = subprocess.Popen(
-                [PYTHON, "-m", "api.dashboard", "--port", str(PORT)],
+                [
+                    PYTHON, "-m", "api.dashboard",
+                    "--port", str(PORT),
+                    "--chain", chain_path,
+                    "--events", events_path
+                ],
                 cwd=str(ROOT),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,

@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainTrap v2 — Live Defense Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg:        #040810;
+    --surface:   #080f1c;
+    --card:      #0b1525;
+    --border:    #0f2040;
+    --green:     #00ff88;
+    --green-dim: #00c066;
+    --red:       #ff2244;
+    --red-dim:   #cc1133;
+    --amber:     #ffaa00;
+    --blue:      #0088ff;
+    --cyan:      #00ccff;
+    --white:     #e8f0ff;
+    --muted:     #4a6080;
+    --mono:      'Share Tech Mono', monospace;
+    --sans:      'Rajdhani', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+    position: relative;
+  }
+
+  .logo-icon svg { width: 38px; height: 38px; }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 18px;
+    color: var(--green);
+    letter-spacing: 2px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 1px;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    border: 1px solid;
+    transition: all 0.3s;
+  }
+
+  .status-pill.ok {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(0,255,136,0.05);
+  }
+
+  .status-pill.alert {
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(255,34,68,0.08);
+    animation: pulse-red 1s infinite;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-pill.ok .status-dot { animation: pulse-green 2s infinite; }
+
+  @keyframes pulse-green {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,34,68,0.4); }
+    50% { box-shadow: 0 0 20px rgba(255,34,68,0.8); }
+  }
+
+  .header-time {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── ALERT BANNER ── */
+  #alert-banner {
+    display: none;
+    background: linear-gradient(90deg, rgba(255,34,68,0.15), rgba(255,34,68,0.05));
+    border-bottom: 2px solid var(--red);
+    padding: 14px 28px;
+    animation: flash-banner 0.5s ease;
+  }
+
+  #alert-banner.show { display: flex; align-items: center; gap: 16px; }
+
+  @keyframes flash-banner {
+    0% { opacity: 0; transform: translateY(-10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .banner-icon { font-size: 24px; }
+
+  .banner-text h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--red);
+    letter-spacing: 2px;
+  }
+
+  .banner-text p {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(255,34,68,0.8);
+    margin-top: 2px;
+  }
+
+  .banner-details {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--red);
+    text-align: right;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: auto 1fr;
+    gap: 1px;
+    background: var(--border);
+    height: calc(100vh - 67px);
+  }
+
+  /* ── PANEL BASE ── */
+  .panel {
+    background: var(--bg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .panel-header span { color: var(--cyan); }
+
+  /* ── LEFT PANEL: STATS ── */
+  .stats-panel {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  .stat-block {
+    padding: 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .stat-value.green { color: var(--green); }
+  .stat-value.red   { color: var(--red); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.blue  { color: var(--blue); }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  /* ── SHIELD GRAPHIC ── */
+  .shield-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .shield-svg { position: relative; }
+
+  #shield-ring {
+    transition: stroke 0.5s, filter 0.5s;
+    filter: drop-shadow(0 0 8px var(--green));
+  }
+
+  .shield-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  .shield-label.ok   { color: var(--green); }
+  .shield-label.warn { color: var(--red); }
+
+  /* ── CENTER TOP: ENTROPY GAUGE ── */
+  .entropy-panel {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 200px;
+  }
+
+  .entropy-inner {
+    padding: 16px 20px;
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .entropy-bar-wrap {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 3px;
+  }
+
+  .entropy-bar-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 22px;
+  }
+
+  .bar-file {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 14px;
+    background: var(--surface);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease, background 0.3s;
+  }
+
+  .bar-val {
+    font-family: var(--mono);
+    font-size: 10px;
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Entropy color thresholds */
+  .bar-fill.safe    { background: linear-gradient(90deg, #00aa55, #00ff88); }
+  .bar-fill.warn    { background: linear-gradient(90deg, #cc7700, #ffaa00); }
+  .bar-fill.danger  { background: linear-gradient(90deg, #cc0022, #ff2244); }
+
+  /* ── ENTROPY THRESHOLD LINE ── */
+  .threshold-note {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 8px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .threshold-line {
+    display: inline-block;
+    width: 20px;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, var(--amber) 0, var(--amber) 4px, transparent 4px, transparent 8px);
+    vertical-align: middle;
+  }
+
+  /* ── CENTER BOTTOM: EVENT LOG ── */
+  .events-panel {
+    grid-column: 2;
+    grid-row: 2;
+    overflow: hidden;
+  }
+
+  .events-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .events-scroll::-webkit-scrollbar { width: 4px; }
+  .events-scroll::-webkit-scrollbar-track { background: var(--surface); }
+  .events-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .event-row {
+    display: grid;
+    grid-template-columns: 120px 80px 1fr;
+    gap: 12px;
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(15,32,64,0.5);
+    font-family: var(--mono);
+    font-size: 11px;
+    animation: slide-in 0.3s ease;
+    transition: background 0.2s;
+  }
+
+  .event-row:hover { background: var(--surface); }
+
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .event-row.critical { border-left: 3px solid var(--red); }
+  .event-row.warning  { border-left: 3px solid var(--amber); }
+  .event-row.info     { border-left: 3px solid var(--blue); }
+
+  .ev-time { color: var(--muted); }
+
+  .ev-type {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .ev-type.critical { color: var(--red); }
+  .ev-type.warning  { color: var(--amber); }
+  .ev-type.info     { color: var(--cyan); }
+
+  .ev-path { color: var(--white); opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── RIGHT PANEL: BLOCKCHAIN ── */
+  .chain-panel {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .chain-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .chain-scroll::-webkit-scrollbar { width: 4px; }
+  .chain-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .block-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    animation: block-appear 0.4s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .block-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+  }
+
+  .block-card.ransomware::before { background: var(--red); }
+  .block-card.canary::before     { background: var(--amber); }
+  .block-card.entropy::before    { background: var(--amber); }
+  .block-card.normal::before     { background: var(--blue); }
+  .block-card.self_test::before  { background: var(--green); }
+
+  @keyframes block-appear {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .block-index {
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .block-index strong { color: var(--cyan); }
+
+  .block-event {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .block-event.red    { color: var(--red); }
+  .block-event.amber  { color: var(--amber); }
+  .block-event.green  { color: var(--green); }
+  .block-event.blue   { color: var(--blue); }
+
+  .block-hash {
+    color: var(--muted);
+    font-size: 9px;
+    word-break: break-all;
+    line-height: 1.4;
+    margin-bottom: 4px;
+  }
+
+  .block-hash .hash-val { color: rgba(0,204,255,0.5); }
+
+  .block-time {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  .chain-link {
+    text-align: center;
+    color: var(--border);
+    font-size: 16px;
+    user-select: none;
+  }
+
+  /* ── CHAIN INTEGRITY ── */
+  .chain-integrity {
+    padding: 10px 12px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .integrity-ok   { color: var(--green); }
+  .integrity-fail { color: var(--red); }
+
+  /* ── ATTACK DEMO CONTROLS ── */
+  .demo-controls {
+    padding: 12px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .demo-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.2s;
+    min-width: 100px;
+  }
+
+  .demo-btn:hover { opacity: 0.8; transform: translateY(-1px); }
+  .demo-btn:active { transform: translateY(0); }
+
+  .demo-btn.attack {
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  .demo-btn.attack:hover {
+    background: rgba(255,34,68,0.1);
+    box-shadow: 0 0 12px rgba(255,34,68,0.3);
+  }
+
+  .demo-btn.slow-attack {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  .demo-btn.slow-attack:hover { background: rgba(255,170,0,0.1); }
+
+  .demo-btn.reset {
+    border-color: var(--muted);
+    color: var(--muted);
+  }
+
+  .demo-btn.reset:hover { background: rgba(74,96,128,0.2); }
+
+  .demo-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  /* ── ATTACK PROGRESS ── */
+  #attack-progress {
+    display: none;
+    padding: 10px 16px;
+    background: rgba(255,34,68,0.05);
+    border-top: 1px solid rgba(255,34,68,0.2);
+    flex-shrink: 0;
+  }
+
+  #attack-progress.show { display: block; }
+
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--red);
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .progress-track {
+    height: 4px;
+    background: var(--surface);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--red-dim), var(--red));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  /* ── CANVAS CHART ── */
+  #entropy-chart {
+    flex: 1;
+    width: 100%;
+    display: block;
+  }
+
+  /* ── CONNECTION OVERLAY ── */
+  #conn-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(4,8,16,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    gap: 20px;
+  }
+
+  #conn-overlay.hidden { display: none; }
+
+  .conn-logo {
+    font-family: var(--mono);
+    font-size: 28px;
+    color: var(--green);
+    letter-spacing: 4px;
+  }
+
+  .conn-msg {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  .conn-spinner {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .conn-api-url {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--cyan);
+    background: var(--surface);
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .conn-retry {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--amber);
+    cursor: pointer;
+    text-decoration: underline;
+    display: none;
+  }
+
+  /* ── DEMO MODE (no API) ── */
+  #demo-mode-banner {
+    display: none;
+    background: rgba(0,136,255,0.08);
+    border-bottom: 1px solid rgba(0,136,255,0.2);
+    padding: 8px 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--blue);
+    letter-spacing: 1px;
+    text-align: center;
+  }
+
+  #demo-mode-banner.show { display: block; }
+
+  /* ── GRID LINES BG ── */
+  .panel:nth-child(2) {
+    background-image: radial-gradient(rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+</style>
+</head>
+<body>
+
+<!-- CONNECTION OVERLAY -->
+<div id="conn-overlay">
+  <div class="conn-logo">CHAINTRAP v2</div>
+  <div class="conn-spinner"></div>
+  <div class="conn-msg">CONNECTING TO DEFENSE ENGINE...</div>
+  <div class="conn-api-url" id="conn-url">http://localhost:5000</div>
+  <div class="conn-retry" id="conn-retry" onclick="enterDemoMode()">
+    ▶ Run in Demo Mode (no API needed)
+  </div>
+</div>
+
+<!-- DEMO MODE BANNER -->
+<div id="demo-mode-banner">
+  ⚡ DEMO MODE — Simulated data. To connect live: start ChainTrap API server on port 5000.
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 38 38" fill="none">
+        <path d="M19 3L4 10v10c0 8.5 6.4 16.4 15 18.4C27.6 36.4 34 28.5 34 20V10L19 3z"
+              stroke="#00ff88" stroke-width="1.5" fill="rgba(0,255,136,0.05)"/>
+        <path d="M13 19l4 4 8-8" stroke="#00ff88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">CHAINTRAP</div>
+      <div class="logo-sub">RANSOMWARE DEFENSE SYSTEM v2</div>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="status-pill ok" id="engine-status">
+      <div class="status-dot"></div>
+      <span id="engine-text">ENGINE ACTIVE</span>
+    </div>
+    <div class="status-pill ok" id="chain-status">
+      <div class="status-dot"></div>
+      <span>CHAIN INTACT</span>
+    </div>
+    <div class="header-time" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- ALERT BANNER -->
+<div id="alert-banner">
+  <div class="banner-icon">🚨</div>
+  <div class="banner-text">
+    <h2>RANSOMWARE DETECTED</h2>
+    <p id="alert-detail">High-entropy file write detected — attack in progress</p>
+  </div>
+  <div class="banner-details" id="alert-meta"></div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- LEFT: STATS -->
+  <div class="panel stats-panel">
+    <div class="panel-header">SYSTEM STATUS <span>LIVE</span></div>
+
+    <div class="shield-container">
+      <svg width="100" height="110" viewBox="0 0 100 110">
+        <path id="shield-bg"
+          d="M50 5L10 22v26c0 24 16 46 40 53 24-7 40-29 40-53V22L50 5z"
+          fill="rgba(0,255,136,0.04)" stroke="rgba(0,255,136,0.15)" stroke-width="1"/>
+        <path id="shield-ring"
+          d="M50 5L10 22v26c0 24 16 46 40 53 24-7 40-29 40-53V22L50 5z"
+          fill="none" stroke="#00ff88" stroke-width="2.5"/>
+        <text id="shield-pct" x="50" y="52" text-anchor="middle"
+          font-family="Share Tech Mono" font-size="22" fill="#00ff88">100%</text>
+        <text x="50" y="68" text-anchor="middle"
+          font-family="Share Tech Mono" font-size="8" fill="#4a6080">PROTECTED</text>
+      </svg>
+      <div class="shield-label ok" id="shield-label">ALL SYSTEMS NOMINAL</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-label">FILES MONITORED</div>
+      <div class="stat-value blue" id="stat-monitored">0</div>
+      <div class="stat-sub">active watchpoints</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-label">THREATS BLOCKED</div>
+      <div class="stat-value red" id="stat-threats">0</div>
+      <div class="stat-sub">ransomware events</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-label">BLOCKCHAIN BLOCKS</div>
+      <div class="stat-value green" id="stat-blocks">0</div>
+      <div class="stat-sub">immutable audit entries</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-label">CANARY STATUS</div>
+      <div class="stat-value amber" id="stat-canary">—</div>
+      <div class="stat-sub">honeyfile tripwires</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-label">UPTIME</div>
+      <div class="stat-value" style="color:var(--cyan); font-size:22px;" id="stat-uptime">00:00:00</div>
+    </div>
+  </div>
+
+  <!-- CENTER TOP: ENTROPY MONITOR -->
+  <div class="panel entropy-panel">
+    <div class="panel-header">
+      REAL-TIME ENTROPY MONITOR
+      <span>THRESHOLD: 7.2 bits/byte</span>
+    </div>
+    <div class="entropy-inner">
+      <div class="entropy-bar-wrap">
+        <div class="entropy-bar-label">FILE ENTROPY READINGS (last 8 events)</div>
+        <div id="entropy-bars"></div>
+      </div>
+    </div>
+    <div class="threshold-note">
+      <span class="threshold-line"></span>
+      Dashed line = detection threshold (7.2). Above this → suspicious. Above 7.8 → critical.
+    </div>
+  </div>
+
+  <!-- CENTER BOTTOM: EVENT LOG -->
+  <div class="panel events-panel">
+    <div class="panel-header">
+      LIVE EVENT LOG
+      <span id="event-count">0 events</span>
+    </div>
+    <div class="events-scroll" id="event-log">
+      <div style="padding: 20px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center;">
+        Waiting for events...
+      </div>
+    </div>
+    <div id="attack-progress">
+      <div class="progress-label">
+        <span>🔴 ATTACK IN PROGRESS</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+    <div class="demo-controls">
+      <button class="demo-btn attack" id="btn-fast-attack" onclick="triggerDemoAttack('fast')">
+        ⚡ FAST ATTACK<br><small style="font-size:9px;opacity:0.7">LockBit-style</small>
+      </button>
+      <button class="demo-btn slow-attack" id="btn-slow-attack" onclick="triggerDemoAttack('slow')">
+        🐢 SLOW ATTACK<br><small style="font-size:9px;opacity:0.7">Evasion-style</small>
+      </button>
+      <button class="demo-btn reset" onclick="resetDemo()">
+        ↺ RESET
+      </button>
+    </div>
+  </div>
+
+  <!-- RIGHT: BLOCKCHAIN LEDGER -->
+  <div class="panel chain-panel">
+    <div class="panel-header">
+      BLOCKCHAIN AUDIT LEDGER
+      <span id="chain-head">HEAD: —</span>
+    </div>
+    <div class="chain-scroll" id="chain-blocks">
+      <div style="padding: 20px; font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: center;">
+        Chain loading...
+      </div>
+    </div>
+    <div class="chain-integrity">
+      <span class="integrity-ok" id="integrity-status">✓ CHAIN INTEGRITY: VERIFIED</span>
+      <span style="color:var(--muted);font-size:9px;" id="last-verified">just now</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════
+const API_BASE = 'http://localhost:5000';
+let DEMO_MODE = false;
+let connected = false;
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let state = {
+  events: [],
+  blocks: [],
+  threats: 0,
+  monitored: 0,
+  canaryActive: 0,
+  chainIntact: true,
+  alertActive: false,
+  startTime: Date.now(),
+  eventCount: 0
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// DEMO DATA GENERATORS
+// ═══════════════════════════════════════════════════════════════════
+const demoFiles = [
+  'Documents/Q4_Report_2025.docx',
+  'Documents/Salary_Slip_March.xlsx',
+  'Documents/AIIMS_Patient_Records.db',
+  'Desktop/Project_Chaintrap.pdf',
+  'Downloads/Budget_2026.xlsx',
+  'Documents/Ministry_Brief.docx',
+  'Desktop/Tender_Doc_Final.pdf',
+  'Documents/NIC_Access_Creds.txt',
+];
+
+function sha256sim(input) {
+  // Simulated hash for demo
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = Math.imul(31, h) + input.charCodeAt(i) | 0;
+  }
+  return Math.abs(h).toString(16).padStart(8,'0') + 
+         Math.abs(h*3).toString(16).padStart(8,'0') +
+         Math.abs(h*7).toString(16).padStart(8,'0') +
+         Math.abs(h*11).toString(16).padStart(8,'0') +
+         Math.abs(h*13).toString(16).padStart(8,'0') +
+         Math.abs(h*17).toString(16).padStart(8,'0') +
+         Math.abs(h*19).toString(16).padStart(8,'0') +
+         Math.abs(h*23).toString(16).padStart(8,'0');
+}
+
+function genDemoEvents() {
+  const now = Date.now();
+  return [
+    { timestamp: new Date(now-45000).toISOString(), event_type: 'MONITOR_START', severity: 'INFO',
+      file_path: 'ChainTrap engine initialised', entropy: null },
+    { timestamp: new Date(now-40000).toISOString(), event_type: 'DECOY_DEPLOYED', severity: 'INFO',
+      file_path: 'Documents/~aaa_important_backup.docx', entropy: 3.2 },
+    { timestamp: new Date(now-35000).toISOString(), event_type: 'FILE_SCAN', severity: 'INFO',
+      file_path: demoFiles[0], entropy: 3.1 },
+    { timestamp: new Date(now-30000).toISOString(), event_type: 'FILE_SCAN', severity: 'INFO',
+      file_path: demoFiles[1], entropy: 4.2 },
+    { timestamp: new Date(now-25000).toISOString(), event_type: 'CANARY_ACTIVE', severity: 'INFO',
+      file_path: '4 honeyfiles armed with canary tokens', entropy: null },
+    { timestamp: new Date(now-20000).toISOString(), event_type: 'FILE_SCAN', severity: 'INFO',
+      file_path: demoFiles[2], entropy: 2.8 },
+  ];
+}
+
+function genDemoBlocks() {
+  const blocks = [];
+  const evs = genDemoEvents();
+  evs.forEach((e, i) => {
+    const prevHash = i === 0 ? '0'.repeat(64) : sha256sim(blocks[i-1].hash + String(i));
+    const hash = sha256sim(prevHash + e.event_type + String(i));
+    blocks.push({ index: i, event_type: e.event_type, timestamp: e.timestamp,
+                  hash: hash, prev_hash: prevHash, entropy: e.entropy });
+  });
+  return blocks;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// API CALLS
+// ═══════════════════════════════════════════════════════════════════
+async function apiGet(path) {
+  if (DEMO_MODE) return null;
+  try {
+    const r = await fetch(API_BASE + path, { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function tryConnect() {
+  const data = await apiGet('/api/status');
+  return data !== null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEMO ATTACK SIMULATION (runs in browser, no API needed)
+// ═══════════════════════════════════════════════════════════════════
+let attackRunning = false;
+
+async function triggerDemoAttack(speed) {
+  if (attackRunning) return;
+  attackRunning = true;
+  document.getElementById('btn-fast-attack').disabled = true;
+  document.getElementById('btn-slow-attack').disabled = true;
+
+  const files = [...demoFiles].sort(() => Math.random() - 0.5).slice(0, 6);
+  const delay = speed === 'fast' ? 600 : 2500;
+  const attackName = speed === 'fast' ? 'LockBit-3.0' : 'SlowBurn-Evasion';
+
+  // Show progress bar
+  const prog = document.getElementById('attack-progress');
+  prog.classList.add('show');
+
+  // Phase 1: Recon
+  addDemoEvent({
+    event_type: 'RECON_DETECTED',
+    severity: 'WARNING',
+    file_path: `${attackName} scanning directory tree...`,
+    entropy: null
+  });
+
+  await sleep(800);
+
+  // Phase 2: Canary touched (if slow attack)
+  if (speed === 'slow') {
+    await sleep(1000);
+    addDemoEvent({
+      event_type: 'CANARY_TRIGGERED',
+      severity: 'CRITICAL',
+      file_path: 'Documents/~aaa_important_backup.docx — HONEYFILE ACCESSED',
+      entropy: null
+    });
+    addDemoBlock('CANARY_TRIGGERED', 'CANARY_TRIGGERED', 7.9);
+    triggerAlert('Canary token fired — honeyfile accessed before encryption began', '');
+  }
+
+  // Phase 3: Encrypt files one by one
+  for (let i = 0; i < files.length; i++) {
+    await sleep(delay);
+    const entropy = 7.4 + Math.random() * 0.55;
+    const isCritical = entropy > 7.6;
+    const pct = Math.round(((i + 1) / files.length) * 100);
+
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = pct + '%';
+
+    addDemoEvent({
+      event_type: isCritical ? 'RANSOMWARE_DETECTED' : 'HIGH_ENTROPY_WRITE',
+      severity: isCritical ? 'CRITICAL' : 'WARNING',
+      file_path: files[i],
+      entropy: entropy
+    });
+
+    addDemoBlock(isCritical ? 'RANSOMWARE_DETECTED' : 'HIGH_ENTROPY', files[i], entropy);
+
+    if (isCritical && !state.alertActive) {
+      state.threats++;
+      document.getElementById('stat-threats').textContent = state.threats;
+      triggerAlert(
+        `High-entropy write on ${files[i].split('/').pop()} — entropy ${entropy.toFixed(3)} bits`,
+        `Score: ${entropy.toFixed(3)}/8.000 | File: ${files[i]}`
+      );
+    }
+
+    updateEntropyBars();
+  }
+
+  // Phase 4: Block + report
+  await sleep(speed === 'fast' ? 400 : 1200);
+  addDemoEvent({
+    event_type: 'PROCESS_KILLED',
+    severity: 'CRITICAL',
+    file_path: `${attackName} process terminated. Network lockdown initiated.`,
+    entropy: null
+  });
+  addDemoBlock('PROCESS_KILLED', attackName + ' — NEUTRALISED', 0);
+
+  await sleep(500);
+  addDemoEvent({
+    event_type: 'BLOCKCHAIN_SEALED',
+    severity: 'INFO',
+    file_path: `Forensic evidence sealed. ${files.length + 2} blocks recorded.`,
+    entropy: null
+  });
+
+  prog.classList.remove('show');
+  attackRunning = false;
+  document.getElementById('btn-fast-attack').disabled = false;
+  document.getElementById('btn-slow-attack').disabled = false;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════════════════════
+// UI UPDATES
+// ═══════════════════════════════════════════════════════════════════
+function addDemoEvent(ev) {
+  const ts = new Date().toISOString();
+  ev.timestamp = ev.timestamp || ts;
+  state.events.unshift(ev);
+  if (state.events.length > 60) state.events.pop();
+  state.eventCount++;
+  renderEvents();
+}
+
+function addDemoBlock(type, path, entropy) {
+  const prevHash = state.blocks.length > 0
+    ? state.blocks[0].hash
+    : '0'.repeat(64);
+  const idx = state.blocks.length;
+  const hash = sha256sim(prevHash + type + String(idx) + String(Date.now()));
+  state.blocks.unshift({
+    index: idx, event_type: type, file_path: path,
+    entropy: entropy, timestamp: new Date().toISOString(),
+    hash: hash, prev_hash: prevHash
+  });
+  if (state.blocks.length > 20) state.blocks.pop();
+  document.getElementById('stat-blocks').textContent = idx + 1;
+  document.getElementById('chain-head').textContent = 'HEAD: ' + hash.slice(0,10) + '...';
+  renderChain();
+}
+
+function triggerAlert(detail, meta) {
+  if (state.alertActive) return;
+  state.alertActive = true;
+
+  const banner = document.getElementById('alert-banner');
+  banner.classList.add('show');
+  document.getElementById('alert-detail').textContent = detail;
+  document.getElementById('alert-meta').innerHTML = meta;
+
+  // Red status
+  const es = document.getElementById('engine-status');
+  es.className = 'status-pill alert';
+  document.getElementById('engine-text').textContent = 'THREAT DETECTED';
+
+  // Shield
+  document.getElementById('shield-ring').setAttribute('stroke', '#ff2244');
+  document.getElementById('shield-ring').style.filter = 'drop-shadow(0 0 12px #ff2244)';
+  document.getElementById('shield-pct').setAttribute('fill', '#ff2244');
+  document.getElementById('shield-pct').textContent = 'ALERT';
+  document.getElementById('shield-label').textContent = 'ATTACK INTERCEPTED';
+  document.getElementById('shield-label').className = 'shield-label warn';
+}
+
+function resetDemo() {
+  state = {
+    events: genDemoEvents(),
+    blocks: genDemoBlocks(),
+    threats: 0,
+    monitored: Math.floor(Math.random() * 40) + 20,
+    canaryActive: 4,
+    chainIntact: true,
+    alertActive: false,
+    startTime: Date.now(),
+    eventCount: state.eventCount
+  };
+  attackRunning = false;
+  document.getElementById('btn-fast-attack').disabled = false;
+  document.getElementById('btn-slow-attack').disabled = false;
+
+  document.getElementById('alert-banner').classList.remove('show');
+  document.getElementById('engine-status').className = 'status-pill ok';
+  document.getElementById('engine-text').textContent = 'ENGINE ACTIVE';
+
+  document.getElementById('shield-ring').setAttribute('stroke', '#00ff88');
+  document.getElementById('shield-ring').style.filter = 'drop-shadow(0 0 8px #00ff88)';
+  document.getElementById('shield-pct').setAttribute('fill', '#00ff88');
+  document.getElementById('shield-pct').textContent = '100%';
+  document.getElementById('shield-label').textContent = 'ALL SYSTEMS NOMINAL';
+  document.getElementById('shield-label').className = 'shield-label ok';
+
+  document.getElementById('stat-threats').textContent = '0';
+  document.getElementById('stat-monitored').textContent = state.monitored;
+  document.getElementById('stat-blocks').textContent = state.blocks.length;
+  document.getElementById('stat-canary').textContent = state.canaryActive + ' ARMED';
+  document.getElementById('attack-progress').classList.remove('show');
+  document.getElementById('progress-fill').style.width = '0%';
+
+  renderEvents();
+  renderChain();
+  updateEntropyBars();
+}
+
+function renderEvents() {
+  const log = document.getElementById('event-log');
+  const count = document.getElementById('event-count');
+  count.textContent = state.events.length + ' events';
+
+  const html = state.events.slice(0, 30).map(ev => {
+    const ts = new Date(ev.timestamp).toLocaleTimeString('en-IN', {hour12: false});
+    const sev = (ev.severity || 'INFO').toLowerCase();
+    const cls = sev === 'critical' ? 'critical' : sev === 'warning' ? 'warning' : 'info';
+    const entStr = ev.entropy != null ? ` [${Number(ev.entropy).toFixed(3)}]` : '';
+    return `<div class="event-row ${cls}">
+      <div class="ev-time">${ts}</div>
+      <div class="ev-type ${cls}">${(ev.event_type || '').replace(/_/g,' ')}</div>
+      <div class="ev-path">${(ev.file_path || '')}${entStr}</div>
+    </div>`;
+  }).join('');
+  log.innerHTML = html || '<div style="padding:20px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;">Waiting for events...</div>';
+}
+
+function renderChain() {
+  const container = document.getElementById('chain-blocks');
+  if (state.blocks.length === 0) {
+    container.innerHTML = '<div style="padding:20px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;">Chain loading...</div>';
+    return;
+  }
+
+  const html = state.blocks.slice(0, 12).map((b, i) => {
+    const et = (b.event_type || '').toLowerCase();
+    let cardClass = 'normal';
+    let textClass = 'blue';
+    if (et.includes('ransomware') || et.includes('killed') || et.includes('canary')) {
+      cardClass = 'ransomware'; textClass = 'red';
+    } else if (et.includes('entropy') || et.includes('warning') || et.includes('recon')) {
+      cardClass = 'entropy'; textClass = 'amber';
+    } else if (et.includes('self_test')) {
+      cardClass = 'self_test'; textClass = 'green';
+    }
+
+    const ts = new Date(b.timestamp).toLocaleTimeString('en-IN', {hour12:false});
+    const entStr = b.entropy != null && b.entropy > 0
+      ? `<div class="block-hash">entropy: <span class="hash-val">${Number(b.entropy).toFixed(4)}</span></div>`
+      : '';
+
+    return (i < state.blocks.length - 1 ? '' : '') +
+      `<div class="block-card ${cardClass}">
+        <div class="block-index">BLOCK <strong>#${b.index}</strong></div>
+        <div class="block-event ${textClass}">${(b.event_type || '').replace(/_/g,' ')}</div>
+        ${entStr}
+        <div class="block-hash">hash: <span class="hash-val">${(b.hash || '').slice(0,24)}...</span></div>
+        <div class="block-hash">prev: <span class="hash-val">${(b.prev_hash || '').slice(0,16)}...</span></div>
+        <div class="block-time">${ts}</div>
+      </div>` +
+      (i < state.blocks.slice(0,12).length - 1 ? '<div class="chain-link">↓</div>' : '');
+  }).join('');
+
+  container.innerHTML = html;
+}
+
+function updateEntropyBars() {
+  const container = document.getElementById('entropy-bars');
+  const relevantEvents = state.events
+    .filter(e => e.entropy != null)
+    .slice(0, 8);
+
+  if (relevantEvents.length === 0) {
+    container.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:8px 0;">No file scans yet...</div>';
+    return;
+  }
+
+  const html = relevantEvents.map(ev => {
+    const ent = Number(ev.entropy);
+    const pct = Math.min(100, (ent / 8) * 100);
+    const cls = ent > 7.6 ? 'danger' : ent > 7.0 ? 'warn' : 'safe';
+    const col = ent > 7.6 ? 'var(--red)' : ent > 7.0 ? 'var(--amber)' : 'var(--green)';
+    const fname = (ev.file_path || '').split('/').pop().split('\\').pop();
+    return `<div class="bar-row">
+      <div class="bar-file">${fname}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${cls}" style="width:${pct}%"></div>
+      </div>
+      <div class="bar-val" style="color:${col}">${ent.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LIVE API POLLING
+// ═══════════════════════════════════════════════════════════════════
+async function pollEvents() {
+  const data = await apiGet('/api/events?limit=30');
+  if (!data) return;
+
+  const events = data.events || data || [];
+  if (events.length !== state.eventCount) {
+    state.events = events;
+    state.eventCount = events.length;
+    renderEvents();
+    updateEntropyBars();
+
+    // Check for new threats
+    const threats = events.filter(e =>
+      (e.severity || '').toUpperCase() === 'CRITICAL' ||
+      (e.event_type || '').includes('RANSOMWARE')
+    );
+    if (threats.length > state.threats) {
+      state.threats = threats.length;
+      document.getElementById('stat-threats').textContent = state.threats;
+      triggerAlert(
+        threats[0].file_path || 'High entropy write detected',
+        `Entropy: ${threats[0].entropy || '?'}`
+      );
+    }
+  }
+}
+
+async function pollChain() {
+  const data = await apiGet('/api/chain?limit=15');
+  if (!data) return;
+
+  const blocks = data.blocks || data || [];
+  state.blocks = blocks.reverse ? [...blocks].reverse() : blocks;
+  document.getElementById('stat-blocks').textContent = blocks.length;
+
+  if (blocks.length > 0) {
+    const head = blocks[blocks.length - 1] || blocks[0];
+    const h = (head.hash || '').slice(0, 10);
+    document.getElementById('chain-head').textContent = `HEAD: ${h}...`;
+  }
+  renderChain();
+}
+
+async function pollStatus() {
+  const data = await apiGet('/api/status');
+  if (!data) return;
+  state.monitored = data.monitored_files || data.files_monitored || state.monitored;
+  state.canaryActive = data.canary_count || data.canary_active || state.canaryActive;
+  document.getElementById('stat-monitored').textContent = state.monitored;
+  document.getElementById('stat-canary').textContent = state.canaryActive + ' ARMED';
+}
+
+async function pollChainIntegrity() {
+  const data = await apiGet('/api/chain/verify');
+  if (!data) return;
+  const ok = data.ok !== false && data.valid !== false;
+  document.getElementById('integrity-status').textContent =
+    ok ? '✓ CHAIN INTEGRITY: VERIFIED' : '✗ CHAIN INTEGRITY: COMPROMISED';
+  document.getElementById('integrity-status').className =
+    ok ? 'integrity-ok' : 'integrity-fail';
+  document.getElementById('last-verified').textContent =
+    'verified ' + new Date().toLocaleTimeString('en-IN', {hour12:false});
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════════════════════════════
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-IN', {hour12: false});
+  const up = Math.floor((Date.now() - state.startTime) / 1000);
+  const h = String(Math.floor(up/3600)).padStart(2,'0');
+  const m = String(Math.floor((up%3600)/60)).padStart(2,'0');
+  const s = String(up%60).padStart(2,'0');
+  document.getElementById('stat-uptime').textContent = `${h}:${m}:${s}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEMO MODE (no API)
+// ═══════════════════════════════════════════════════════════════════
+function enterDemoMode() {
+  DEMO_MODE = true;
+  document.getElementById('conn-overlay').classList.add('hidden');
+  document.getElementById('demo-mode-banner').classList.add('show');
+  initDemoState();
+  startPolling();
+}
+
+function initDemoState() {
+  state.events = genDemoEvents();
+  state.blocks = genDemoBlocks();
+  state.monitored = 34;
+  state.canaryActive = 4;
+  state.startTime = Date.now() - 45000;
+
+  document.getElementById('stat-monitored').textContent = state.monitored;
+  document.getElementById('stat-canary').textContent = state.canaryActive + ' ARMED';
+  document.getElementById('stat-blocks').textContent = state.blocks.length;
+  renderEvents();
+  renderChain();
+  updateEntropyBars();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STARTUP
+// ═══════════════════════════════════════════════════════════════════
+function startPolling() {
+  setInterval(updateClock, 1000);
+  if (!DEMO_MODE) {
+    setInterval(pollEvents, 2000);
+    setInterval(pollChain, 3000);
+    setInterval(pollStatus, 5000);
+    setInterval(pollChainIntegrity, 15000);
+  }
+}
+
+async function init() {
+  document.getElementById('conn-url').textContent = API_BASE + '/api/status';
+  updateClock();
+
+  // Try to connect to live API
+  let attempts = 0;
+  const tryConn = async () => {
+    attempts++;
+    const ok = await tryConnect();
+    if (ok) {
+      connected = true;
+      document.getElementById('conn-overlay').classList.add('hidden');
+      await pollStatus();
+      await pollEvents();
+      await pollChain();
+      startPolling();
+    } else {
+      if (attempts >= 3) {
+        document.getElementById('conn-retry').style.display = 'block';
+        document.querySelector('.conn-msg').textContent =
+          'CANNOT REACH ENGINE — API not responding';
+        document.querySelector('.conn-msg').style.color = 'var(--amber)';
+      } else {
+        document.querySelector('.conn-msg').textContent =
+          `CONNECTING... (attempt ${attempts}/3)`;
+        setTimeout(tryConn, 1500);
+      }
+    }
+  };
+
+  setTimeout(tryConn, 800);
+}
+
+init();
+</script>
+</body>
+</html>
