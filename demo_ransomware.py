@@ -168,7 +168,7 @@ def run_attack(target_dir: Path, mode: str):
 
     # ── PHASE 2: Create realistic victim files ───────────────────────────────
     log("📂", CYAN, "Phase 2: Creating victim files (simulating existing documents)...")
-    time.sleep(0.5)
+    time.sleep(0.8)
 
     templates = random.sample(FILE_TEMPLATES, min(6, len(FILE_TEMPLATES)))
     for name, content, ext in templates:
@@ -181,7 +181,7 @@ def run_attack(target_dir: Path, mode: str):
         log("  📄", DIM, f"Created: {name}{ext} ({size//1024}KB)")
 
     print()
-    time.sleep(0.8)
+    time.sleep(3)
 
     # ── PHASE 3: Touch canary file (trigger honeyfile detection) ─────────────
     if mode == 'slow':
@@ -194,7 +194,7 @@ def run_attack(target_dir: Path, mode: str):
         time.sleep(1.5)
     else:
         log("⚡", RED, "Phase 3: Fast mode — skipping recon, direct encryption...")
-        time.sleep(0.3)
+        time.sleep(2)
 
     # ── PHASE 4: ENCRYPT FILES ───────────────────────────────────────────────
     print()
@@ -304,12 +304,8 @@ Examples:
     if args.target:
         target = Path(args.target)
     else:
-        # Default: use Desktop or temp dir
-        desktop = Path.home() / "Desktop"
-        if desktop.exists():
-            target = desktop / "ChainTrap_Demo_Folder"
-        else:
-            target = Path.home() / "ChainTrap_Demo_Folder"
+        target = Path.home() / "ChainTrap" / "demo_target"
+        target.mkdir(parents=True, exist_ok=True)
 
     banner()
 
