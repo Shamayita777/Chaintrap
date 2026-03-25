@@ -38,7 +38,7 @@ RESET = "\033[0m"
 
 # ── Demo target directory ─────────────────────────────────────────────────────
 SCRIPT_DIR   = pathlib.Path(__file__).parent.resolve()
-DEFAULT_TARGET = SCRIPT_DIR / "demo_vault"
+DEFAULT_TARGET = SCRIPT_DIR / "demo_target"
 
 # ── Realistic file content (low entropy — looks like real docs) ───────────────
 CONTENTS = {
@@ -447,7 +447,7 @@ Workflow:
     parser.add_argument("--mode", choices=["fast", "slow"], default="fast",
                         help="fast = LockBit-style  |  slow = evasion + canary")
     parser.add_argument("--target", type=str, default=None,
-                        help="Target directory (default: ./demo_vault)")
+                        help="Target directory (default: ./demo_target)")
     parser.add_argument("--setup", action="store_true",
                         help="Create victim files and exit")
     parser.add_argument("--reset", action="store_true",
@@ -479,7 +479,7 @@ Workflow:
 
     print(f"  {AMBER}Target : {WHITE}{target}{RESET}")
     print(f"  {AMBER}Mode   : {WHITE}{'FAST (LockBit)' if args.mode == 'fast' else 'SLOW (evasion + canary)'}{RESET}")
-    print(f"  {DIM}Only demo_vault files are touched. Your real files are safe.{RESET}\n")
+    print(f"  {DIM}Only demo_target files are touched. Your real files are safe.{RESET}\n")
 
     try:
         input(f"  {CYAN}Press ENTER to begin, Ctrl+C to cancel: {RESET}")
